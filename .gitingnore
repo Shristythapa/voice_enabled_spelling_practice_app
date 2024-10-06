@@ -1,0 +1,5 @@
+# Ignore the words directory
+words/
+
+# Ignore the myenv directory (for virtual environment)
+myenv/
