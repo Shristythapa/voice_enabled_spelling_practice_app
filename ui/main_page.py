@@ -4,20 +4,20 @@ from gtts import gTTS
 import pygame
 import pandas as pd
 from tkinter import *
+import sqlite3
+import datetime
 
-# Load the word list
-data = pd.read_excel("D:/text-to-speach/excles.xlsx")
+
+# Load the word list and their meanings
+data = pd.read_csv("D:/voice_enabled_spelling_pratice/spellings.csv", encoding='ISO-8859-1')
 words = data.iloc[:, 0]
+meanings = data['Meaning'] 
 word_list = words.tolist()
+results = pd.read_csv("D:/voice_enabled_spelling_pratice/results.csv", encoding='ISO-8859-1')
 
-# Add a new column for correctness (1 for correct, 0 for incorrect)
-data['Correctness'] = [None] * len(data)  # Initialize the column with None
 
 # Initialize pygame for audio playback
 pygame.mixer.init()
-
-# Dictionary to store correct word as key and user-entered spelling as value
-spelling_attempts = {}
 
 # Variable to count correct answers
 correct_count = 0
@@ -26,6 +26,10 @@ correct_count = 0
 def play_word():
     global current_word_index
     word = word_list[current_word_index]
+    meaning = meanings[current_word_index]  # Get the meaning of the current word
+    
+    # Display the meaning on the screen
+    meaning_label.config(text=f"Meaning: {meaning}", fg="blue")
     
     try:
         mp3_file = f"words/{word}.mp3"
@@ -45,40 +49,47 @@ def play_word():
 
 # Function to handle the "Next" button
 def next_word():
-    global current_word_index, correct_count
-    
+    global current_word_index, correct_count, results  # Make 'results' global here
+
     # Get the spelling entered by the user
     entered_spelling = spelling_entry.get()
     correct_spelling = word_list[current_word_index]
     
-    # Add the word and the entered spelling to the dictionary
-    spelling_attempts[correct_spelling] = entered_spelling
+    current_date_str = datetime.datetime.now().strftime('%Y-%m-%d') 
+
+    # Add the user-entered spelling to the current word index row
+    data.at[current_word_index, current_date_str] = entered_spelling
+    print(data.head())
     
     # Check if the entered spelling is correct
     if entered_spelling.lower() == correct_spelling.lower():
         result_label.config(text="Correct!", fg="green")
         correct_count += 1  # Increment correct answer count
-        data.at[current_word_index, 'Correctness'] = 1  # Mark as correct (1)
     else:
         result_label.config(text=f"Incorrect! Correct spelling is '{correct_spelling}'", fg="red")
-        data.at[current_word_index, 'Correctness'] = 0  # Mark as incorrect (0)
     
     # Move to the next word
     current_word_index += 1
     if current_word_index < len(word_list):
-        spelling_entry.delete(0, 'end')  # Clear the entry field
-        play_word()  # Automatically play the next word
+        spelling_entry.delete(0, 'end')  
+        play_word()  
     else:
         result_label.config(text=f"All words played! You got {correct_count} out of {len(word_list)} correct.", fg="blue")
         play_button.config(state="disabled")
         next_button.config(state="disabled")
+
+        new_row = {'Date': current_date_str, 'AttemptedWords': len(word_list), 'CorrectWords': correct_count}
         
-        # Print the spelling attempts dictionary
-        print("Spelling attempts:")
-        print(spelling_attempts)
+        # Append the new row to the results DataFrame
+        results = pd.concat([results, pd.DataFrame([new_row])], ignore_index=True)
+
+
+        # Save the updated DataFrames back to the CSV files
+        results.to_csv("D:/voice_enabled_spelling_pratice/results.csv", index=False)
+        data.to_csv("D:/voice_enabled_spelling_pratice/spellings.csv", index=False)
+
+      
         
-        # Save the updated DataFrame with the new "Correctness" column to the Excel file
-        data.to_excel("../updated_excels.xlsx", index=False)  # Save to a new Excel file
 
 # Initialize the current word index
 current_word_index = 0
@@ -102,6 +113,10 @@ spelling_entry.pack(pady=5)
 # Label to show the result of spelling
 result_label = Label(root, text="")
 result_label.pack(pady=5)
+
+# Label to show the meaning of the word
+meaning_label = Label(root, text="Meaning: ", wraplength=400, justify="center")
+meaning_label.pack(pady=10)
 
 # Next Button to move to the next word
 next_button = Button(root, text='Next', width=25, command=next_word)
